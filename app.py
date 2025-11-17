@@ -1,658 +1,837 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
-from datetime import date
 import plotly.express as px
 
+# ============================
+# CONFIGURACIÓN GENERAL
+# ============================
+
+renombrar_columnas = {
+    "PatientID": "ID_Paciente",
+    "Age": "Edad",
+    "Gender": "Genero",
+    "Ethnicity": "Etnicidad",
+    "EducationLevel": "Nivel_Educativo",
+    "BMI": "IMC",
+    "Smoking": "Fuma",
+    "AlcoholConsumption": "Consumo_Alcohol",
+    "PhysicalActivity": "Actividad_Fisica",
+    "DietQuality": "Calidad_Dieta",
+    "SleepQuality": "Calidad_Sueno",
+    "FamilyHistoryAlzheimers": "Antecedentes_Alzheimer",
+    "CardiovascularDisease": "Enfermedad_Cardiovascular",
+    "Diabetes": "Diabetes",
+    "Depression": "Depresion",
+    "HeadInjury": "Lesion_Cabeza",
+    "Hypertension": "Hipertension",
+    "SystolicBP": "Presion_Sistolica",
+    "DiastolicBP": "Presion_Diastolica",
+    "CholesterolTotal": "Colesterol_Total",
+    "CholesterolLDL": "Colesterol_LDL",
+    "CholesterolHDL": "Colesterol_HDL",
+    "CholesterolTriglycerides": "Trigliceridos",
+    "MMSE": "Puntaje_MMSE",
+    "FunctionalAssessment": "Evaluacion_Funcional",
+    "MemoryComplaints": "Quejas_Memoria",
+    "BehavioralProblems": "Problemas_Comportamiento",
+    "ADL": "Actividades_Diarias",
+    "Confusion": "Confusion",
+    "Disorientation": "Desorientacion",
+    "PersonalityChanges": "Cambios_Personalidad",
+    "DifficultyCompletingTasks": "Dificultad_Tareas",
+    "Forgetfulness": "Olvidos",
+    "Diagnosis": "Diagnostico",
+    "DoctorInCharge": "Medico_Encargado"
+}
 st.set_page_config(
-    page_title="Dashboard Estudiantil - Grupo 001",
-    page_icon="📊",
+    page_title="Informe Alzheimer - Ciencia de Datos",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# === LEER EL EXCEL ORIGINAL ===
-
-df_original = pd.read_excel('ListadoDeEstudiantesGrupo_001.xlsx')
-local_url="ListadoDeEstudiantesGrupo_001.xlsx"
-drive_url = "https://docs.google.com/spreadsheets/d/1vpRR2UtcMm9ANHjBQnikS3qkFfa82v_fnLxph0gFJSg/export?format=xlsx"
-df_original = pd.read_excel(drive_url)
-
-
-
-
-# === COPIA PARA PROCESAR ===
-df = df_original.copy()
-
-# Convertir la columna a tipo datetime
-df['Fecha_Nacimiento'] = pd.to_datetime(df['Fecha_Nacimiento'], errors='coerce')
-
-# Calcular el promedio de fechas (ignorando nulos)
-promedio_fecha = df['Fecha_Nacimiento'].dropna().mean()
-
-# Rellenar vacíos o None con la fecha promedio
-df['Fecha_Nacimiento'] = df['Fecha_Nacimiento'].fillna(promedio_fecha)
-
-# Valores Numericos
-df['Estatura'] = pd.to_numeric(df['Estatura'], errors='coerce')
-df['Peso'] = pd.to_numeric(df['Peso'], errors='coerce')
-df['Talla_Zapato'] = pd.to_numeric(df['Talla_Zapato'], errors='coerce')
-
-# === LIMPIAR ESPACIOS VACIOS ===
-df = df.replace(r'^\s*$', pd.NA, regex=True)
-
-# === RELLENAR COLUMNAS NUMÉRICAS CON PROMEDIO ===
-columnas_numericas = ['Estatura', 'Peso', 'Talla_Zapato']
-for col in columnas_numericas:
-    if col in df.columns:
-        promedio = df[col].dropna().mean()
-        df[col] = df[col].fillna(promedio)
-
-# === RELLENAR COLUMNAS CATEGÓRICAS CON MODA ===
-columnas_categoricas = ['RH', 'Color_Cabello', 'Barrio_Residencia']
-
-for col in columnas_categoricas:
-    if col in df.columns:
-        # Limpiar valores vacíos, comas o espacios
-        df[col] = df[col].astype(str).str.strip()                # Quita espacios al inicio y final
-        df[col] = df[col].replace([",", " ,", ", ", "", "None", "nan", "NaN"], pd.NA)
-        
-        # Calcular la moda (valor más frecuente)
-        moda = df[col].mode().iloc[0] if not df[col].mode().empty else None
-        
-        # Rellenar vacíos o comas con la moda
-        df[col] = df[col].fillna(moda)
-
-
-# Asegurar que columnas clave sean numéricas
-df['Estatura'] = pd.to_numeric(df['Estatura'], errors='coerce')
-df['Peso'] = pd.to_numeric(df['Peso'], errors='coerce')
-
-# === CONVERSIÓN DE ESTATURA ===
-if df['Estatura'].max() < 3:
-    df['Estatura_cm'] = df['Estatura'] * 100
-else:
-    df['Estatura_cm'] = df['Estatura']
-
-# === CALCULAR IMC ===
-df['IMC'] = df['Peso'] / ((df['Estatura_cm'] / 100) ** 2)
-
-def clasificar_imc(imc):
-    if pd.isna(imc):
-        return None
-    elif imc < 18.5:
-        return 'Bajo peso'
-    elif imc < 25:
-        return 'Adecuado'
-    elif imc < 30:
-        return 'Sobrepeso'
-    elif imc < 35:
-        return 'Obesidad grado 1'
-    elif imc < 40:
-        return 'Obesidad grado 2'
-    else:
-        return 'Obesidad grado 3'
-
-
-df['Clasificacion IMC'] = df['IMC'].apply(clasificar_imc)
-
-def descripcion_popular(imc):
-    if pd.isna(imc):
-        return None
-    elif imc < 18.5:
-        return 'Delgado'
-    elif imc < 25:
-        return 'Aceptable'
-    elif imc < 30:
-        return 'Sobrepeso'
-    else:
-        return 'Obesidad'
-
-df['Descripcion IMC Popular'] = df['IMC'].apply(descripcion_popular)
-
-
-# --- Calcular la edad ---
-hoy = pd.Timestamp(date.today())
-df['Edad'] = (hoy - df['Fecha_Nacimiento']).dt.days // 365
-
-df['Nombre_Estudiante'] = df['Nombre_Estudiante'].astype(str).str.strip()
-df['Apellido_Estudiante'] = df['Apellido_Estudiante'].astype(str).str.strip()
-
-df['Nombre_Completo'] = df['Nombre_Estudiante'] + " " + df['Apellido_Estudiante']
-
-# Normalizar texto de la columna Barrio_Residencia
-df['Barrio_Residencia'] = (
-    df['Barrio_Residencia']
-    .astype(str)                      # por si hay valores nulos o no string
-    .str.strip()                      # elimina espacios al inicio y final
-    .str.title()                      # convierte a formato tipo "Belén"
-)
-
-df['Color_Cabello'] = (
-    df['Color_Cabello']
-    .astype(str)                      # por si hay valores nulos o no string
-    .str.strip()                      # elimina espacios al inicio y final
-    .str.title()                      # convierte a formato tipo "Belén"
-)
-
-
-# Reemplazar espacios en blanco y strings vacíos por NaN
-df = df.replace(r'^\s*$', pd.NA, regex=True)
-
-# Eliminar columnas completamente vacías (NaN, None o vacías)
-df_limpio = df.dropna(axis=1, how='all')
-
-integrantes_equipo = [
-    "JAIME ALBERTO ALZATE MARULANDA",
-    "JHON STIVEN CORTES RIVERA",
-    "ESTEBAN ESPINOSA ARBOLEDA",
-    "JUAN CAMILO HERRERA OSORIO"
-]
-
-
-df_equipo = df_limpio[df_limpio['Nombre_Completo'].isin(integrantes_equipo)]
-
-
-st.header("Trabajo Final Programación Avanzada")
-st.subheader("Integrantes:")
-
+# ============================
+# ESTILOS GLOBALES (TEXTO GRANDE TIPO PRESENTACIÓN)
+# ============================
 st.markdown("""
-- **Jaime Alberto Alzate Marulanda**  
-- **Jhon Stiven Cortes Rivera**  
-- **Esteban Espinosa Arboleda**  
-- **Juan Camilo Herrera Osorio**
-""")
+    <style>
+    .texto-grande {
+        font-size: 22px;
+        line-height: 1.5;
+    }
+    .texto-mediano {
+        font-size: 20px;
+        line-height: 1.5;
+    }
+    .metric-card {
+        padding: 12px 18px;
+        border-radius: 10px;
+        background-color: #111827;
+        border: 1px solid #374151;
+        margin-bottom: 10px;
+        font-size: 18px;
+    }
+    .metric-valor {
+        color: #10B981;
+        font-weight: bold;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
+# ============================
+# NAVBAR (SIDEBAR)
+# ============================
+st.sidebar.title("Navegación")
 
-
-st.subheader("DataFrame Original")
-st.caption(
-        "Este archivo se obtiene **en tiempo real desde Google Drive** a través de la siguiente URL: "
-        "[Ver en Drive](https://docs.google.com/spreadsheets/d/1vpRR2UtcMm9ANHjBQnikS3qkFfa82v_fnLxph0gFJSg/edit?usp=sharing). "
-        "Los datos se actualizan automáticamente cada vez que se ejecuta la aplicación, mostrando la versión más reciente "
-        "del archivo compartido."
-    )
-
-def resaltar_nulos_y_comas(val):
-    # Convertimos a string para detectar comas o espacios
-    if pd.isna(val) or str(val).strip() in [",", " ,", ", ", ""]:
-        return 'background-color: #2f3542; color: #ffffff;'
-    return ''
-
-st.dataframe(
-    df_original.style.applymap(resaltar_nulos_y_comas),
-    use_container_width=True
-)
-
-st.header('Dashboard Estudiantil - Grupo 001')
-
-# === SECCIÓN DE FILTROS (AL LADO IZQUIERDO) ===
-st.sidebar.subheader("Filtros Interactivos")
-
-# === FILTROS EN TRES COLUMNAS (DENTRO DEL SIDEBAR NO HAY COLUMNAS) ===
-filtro_rh = st.sidebar.multiselect(
-    "Tipo de Sangre (RH):",
-    options=sorted(df_limpio['RH'].dropna().unique())
-)
-
-filtro_cabello = st.sidebar.multiselect(
-    "Color de Cabello:",
-    options=sorted(df_limpio['Color_Cabello'].dropna().unique())
-)
-
-filtro_barrio = st.sidebar.multiselect(
-    "Barrio de Residencia:",
-    options=sorted(df_limpio['Barrio_Residencia'].dropna().unique())
-)
-
-# === SLIDERS ===
-rango_edad = st.sidebar.slider(
-    "Rango de Edad:",
-    min_value=int(df_limpio["Edad"].min()),
-    max_value=int(df_limpio["Edad"].max()),
-    value=(int(df_limpio["Edad"].min()), int(df_limpio["Edad"].max())),
-    step=1
-)
-
-rango_estatura = st.sidebar.slider(
-    "Rango de Estatura (cm):",
-    min_value=int(df_limpio["Estatura_cm"].min()),
-    max_value=int(df_limpio["Estatura_cm"].max()),
-    value=(int(df_limpio["Estatura_cm"].min()), int(df_limpio["Estatura_cm"].max())),
-    step=1
-)
-
-st.sidebar.markdown("### Integrantes del Equipo")
-
-st.sidebar.markdown(
-    "<div style='font-size:12px; line-height:1.2;'>"
-    + "<br>".join(integrantes_equipo) +
-    "</div>",
-    unsafe_allow_html=True
-)
-
-# Crear copias filtradas
-df_filtrado_todos = df_limpio.copy()
-df_filtrado_equipo = df_equipo.copy()
-
-# Aplicar filtros en cascada
-if filtro_rh:
-    df_filtrado_todos = df_filtrado_todos[df_filtrado_todos['RH'].isin(filtro_rh)]
-    df_filtrado_equipo = df_filtrado_equipo[df_filtrado_equipo['RH'].isin(filtro_rh)]
-
-if filtro_cabello:
-    df_filtrado_todos = df_filtrado_todos[df_filtrado_todos['Color_Cabello'].isin(filtro_cabello)]
-    df_filtrado_equipo = df_filtrado_equipo[df_filtrado_equipo['Color_Cabello'].isin(filtro_cabello)]
-
-if filtro_barrio:
-    df_filtrado_todos = df_filtrado_todos[df_filtrado_todos['Barrio_Residencia'].isin(filtro_barrio)]
-    df_filtrado_equipo = df_filtrado_equipo[df_filtrado_equipo['Barrio_Residencia'].isin(filtro_barrio)]
-
-
-# === FILTRO DE RANGO DE EDAD ===
-if rango_edad:
-    df_filtrado_todos = df_filtrado_todos[
-        (df_filtrado_todos['Edad'] >= rango_edad[0]) & (df_filtrado_todos['Edad'] <= rango_edad[1])
+opcion = st.sidebar.radio(
+    "Ir a:",
+    [
+        "Inicio",
+        "Introducción",
+        "Objetivos",
+        "Metodología",
+        "Dataset",
+        "Columnas del Dataset",
+        "Análisis Exploratorio",
+        "Modelamiento Predictivo",
+        "Resultados",
+        "Discusión",
+        "Conclusiones y Recomendaciones"
     ]
-    df_filtrado_equipo = df_filtrado_equipo[
-        (df_filtrado_equipo['Edad'] >= rango_edad[0]) & (df_filtrado_equipo['Edad'] <= rango_edad[1])
-    ]
-
-# === FILTRO DE RANGO DE ESTATURA ===
-if rango_estatura:
-    df_filtrado_todos = df_filtrado_todos[
-        (df_filtrado_todos['Estatura_cm'] >= rango_estatura[0]) & (df_filtrado_todos['Estatura_cm'] <= rango_estatura[1])
-    ]
-    df_filtrado_equipo = df_filtrado_equipo[
-        (df_filtrado_equipo['Estatura_cm'] >= rango_estatura[0]) & (df_filtrado_equipo['Estatura_cm'] <= rango_estatura[1])
-    ]
-
-col1, col2 = st.columns(2)
-
-
-with col1:
-    st.subheader("Dataframe Procesado (Todos los Estudiantes)")
-    st.caption("Este archivo fue procesado para convertir estaturas a centímetros, calcular el IMC y clasificarlo, "
-               "además de eliminar columnas vacías y reemplazar valores faltantes (incluyendo comas o celdas vacías) "
-               "con el promedio o la moda según el tipo de dato. Tambien se normalizaron algunos datos claves ya que algunos usuario colocaban algunas cosas en mayusculas y otros en minusculas esto se detecto en las columnas Barrio_Residencia y Color_Cabello")
-    st.dataframe(df_filtrado_todos, use_container_width=True)
-
-
-with col2:
-    st.subheader("Dataframe Procesado (Equipo de Trabajo)")
-    st.caption("Este archivo fue procesado para convertir estaturas a centímetros, calcular el IMC y clasificarlo, "
-               "además de eliminar columnas vacías y reemplazar valores faltantes (incluyendo comas o celdas vacías) "
-               "con el promedio o la moda según el tipo de dato. Tambien se normalizaron algunos datos claves ya que algunos usuario colocaban algunas cosas en mayusculas y otros en minusculas esto se detecto en las columnas Barrio_Residencia y Color_Cabello")
-    st.dataframe(df_filtrado_equipo, use_container_width=True)
-
-indicadores_todos = {
-    "Edad": round(df_filtrado_todos["Edad"].mean(), 2),
-    "Estatura": round(df_filtrado_todos["Estatura"].mean(), 2),
-    "Peso": round(df_filtrado_todos["Peso"].mean(), 2),
-    "IMC": round(df_filtrado_todos["IMC"].mean(), 2)
-}
-
-indicadores_equipo = {
-    "Edad": round(df_filtrado_equipo["Edad"].mean(), 2),
-    "Estatura": round(df_filtrado_equipo["Estatura"].mean(), 2),
-    "Peso": round(df_filtrado_equipo["Peso"].mean(), 2),
-    "IMC": round(df_filtrado_equipo["IMC"].mean(), 2)
-}
-
-
-st.subheader("Indicadores")
-
-# Titulares
-colstitulos = st.columns(2)
-colstitulos[0].markdown("### Grupo Completo")
-colstitulos[1].markdown("### Mi Equipo")
-
-cols = st.columns([1,1,1,1,1,0.2,1,1,1,1,1])
-
-
-cols[0].metric("Total Estudiantes", len(df_filtrado_todos))
-cols[1].metric("Edad Promedio", indicadores_todos["Edad"])
-cols[2].metric("Estatura Promedio", indicadores_todos["Estatura"])
-cols[3].metric("Peso Promedio", indicadores_todos["Peso"])
-cols[4].metric("IMC Promedio", indicadores_todos["IMC"])
-
-
-with cols[5]:
-    st.markdown("<div style='border-left:2px solid gray;height:60px;margin:auto;'></div>", unsafe_allow_html=True)
-
-
-cols[6].metric("Total Estudiantes", len(df_filtrado_equipo))
-cols[7].metric("Edad Promedio", indicadores_equipo["Edad"])
-cols[8].metric("Estatura Promedio", indicadores_equipo["Estatura"])
-cols[9].metric("Peso Promedio", indicadores_equipo["Peso"])
-cols[10].metric("IMC Promedio", indicadores_equipo["IMC"])
-
-
-# Crear columnas (4 gráficos lado a lado)
-col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-
-# === 1. Grupo Completo - Edad ===
-with col1:
-    fig_edad_todos = px.bar(
-        df_filtrado_todos.groupby('Edad').size().reset_index(name='Cantidad'),
-        x='Edad',
-        y='Cantidad',
-        title='Distribución por Edad - Grupo Completo',
-        color_discrete_sequence=['#1f77b4']
-    )
-    st.plotly_chart(fig_edad_todos, use_container_width=True)
-
-# === 2. Grupo Completo - Tipo de Sangre ===
-with col2:
-    fig_sangre_todos = px.pie(
-        df_filtrado_todos,
-        names='RH',
-        title='Tipo de Sangre - Grupo Completo',
-        hole=0.3,
-        color_discrete_sequence=px.colors.sequential.Blues
-    )
-    st.plotly_chart(fig_sangre_todos, use_container_width=True)
-
-
-
-# === 3. Mi Equipo - Edad ===
-with col3:
-    fig_edad_equipo = px.bar(
-        df_filtrado_equipo.groupby('Edad').size().reset_index(name='Cantidad'),
-        x='Edad',
-        y='Cantidad',
-        title='Distribución por Edad - Mi Equipo',
-        color_discrete_sequence=['#2ca02c']
-    )
-    st.plotly_chart(fig_edad_equipo, use_container_width=True)
-
-# === 4. Mi Equipo - Tipo de Sangre ===
-with col4:
-    fig_sangre_equipo = px.pie(
-        df_filtrado_equipo,
-        names='RH',
-        title='Tipo de Sangre - Mi Equipo',
-        hole=0.3,
-        color_discrete_sequence=px.colors.sequential.Greens
-    )
-    st.plotly_chart(fig_sangre_equipo, use_container_width=True)
-
-
-
-col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-
-# === 1. Grupo Completo - Scatter Estatura vs Peso ===
-with col1:
-    fig_scatter_todos = px.scatter(
-        df_filtrado_todos,
-        x='Estatura',
-        y='Peso',
-        title='Estatura vs Peso - Grupo Completo',
-        color_discrete_sequence=px.colors.qualitative.Set1,
-        trendline="ols"  # línea de tendencia opcional
-    )
-    st.plotly_chart(fig_scatter_todos, use_container_width=True)
-
-# === 2. Grupo Completo - Barras por Color de Cabello ===
-with col2:
-    fig_cabello_todos = px.bar(
-        df_filtrado_todos.groupby('Color_Cabello').size().reset_index(name='Cantidad'),
-        x='Color_Cabello',
-        y='Cantidad',
-        title='Color de Cabello - Grupo Completo',
-        color='Color_Cabello',
-        color_discrete_sequence=px.colors.sequential.Blues
-    )
-    st.plotly_chart(fig_cabello_todos, use_container_width=True)
-
-
-
-# === 3. Mi Equipo - Scatter Estatura vs Peso ===
-with col3:
-    fig_scatter_equipo = px.scatter(
-        df_filtrado_equipo,
-        x='Estatura',
-        y='Peso',
-        title='Estatura vs Peso - Mi Equipo',
-        color_discrete_sequence=px.colors.qualitative.Set2,
-        trendline="ols"
-    )
-    st.plotly_chart(fig_scatter_equipo, use_container_width=True)
-
-# === 4. Mi Equipo - Barras por Color de Cabello ===
-with col4:
-    fig_cabello_equipo = px.bar(
-        df_filtrado_equipo.groupby('Color_Cabello').size().reset_index(name='Cantidad'),
-        x='Color_Cabello',
-        y='Cantidad',
-        title='Color de Cabello - Mi Equipo',
-        color='Color_Cabello',
-        color_discrete_sequence=px.colors.sequential.Greens
-    )
-    st.plotly_chart(fig_cabello_equipo, use_container_width=True)
-
-    # Crear columnas (2 + separador + 2)
-col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-
-# === 1. Grupo Completo - Línea (Tallas de Zapatos) ===
-with col1:
-    fig_tallas_todos = px.line(
-        df_filtrado_todos.groupby('Talla_Zapato').size().reset_index(name='Cantidad'),
-        x='Talla_Zapato',
-        y='Cantidad',
-        markers=True,
-        title='Distribución de Tallas - Grupo Completo',
-        color_discrete_sequence=['#1f77b4']
-    )
-    st.plotly_chart(fig_tallas_todos, use_container_width=True)
-
-with col2:
-    top_barrios_todos = (
-        df_filtrado_todos['Barrio_Residencia']
-        .value_counts()
-        .head(10)
-        .reset_index()
-    )
-    top_barrios_todos.columns = ['Barrio_Residencia', 'Cantidad']  # ✅ renombrar correctamente
-    fig_barrios_todos = px.bar(
-        top_barrios_todos,
-        x='Barrio_Residencia',
-        y='Cantidad',
-        title='Top 10 Barrios - Grupo Completo',
-        color='Barrio_Residencia',
-        color_discrete_sequence=px.colors.sequential.Blues
-    )
-    st.plotly_chart(fig_barrios_todos, use_container_width=True)
-
-
-# === 3. Mi Equipo - Línea (Tallas de Zapatos) ===
-with col3:
-    fig_tallas_equipo = px.line(
-        df_filtrado_equipo.groupby('Talla_Zapato').size().reset_index(name='Cantidad'),
-        x='Talla_Zapato',
-        y='Cantidad',
-        markers=True,
-        title='Distribución de Tallas - Mi Equipo',
-        color_discrete_sequence=['#2ca02c']
-    )
-    st.plotly_chart(fig_tallas_equipo, use_container_width=True)
-
-with col4:
-    top_barrios_equipo = (
-        df_filtrado_equipo['Barrio_Residencia']
-        .value_counts()
-        .head(10)
-        .reset_index()
-    )
-    top_barrios_equipo.columns = ['Barrio_Residencia', 'Cantidad']  # ✅ renombrar correctamente
-    fig_barrios_equipo = px.bar(
-        top_barrios_equipo,
-        x='Barrio_Residencia',
-        y='Cantidad',
-        title='Top 10 Barrios - Mi Equipo',
-        color='Barrio_Residencia',
-        color_discrete_sequence=px.colors.sequential.Greens
-    )
-    st.plotly_chart(fig_barrios_equipo, use_container_width=True)
-
-st.subheader("Top 5 de Mayor Estatura y Mayor Peso (Grupo Completo)")
-
-# === Top 5 por Estatura ===
-top_estatura = df_filtrado_todos.nlargest(5, 'Estatura_cm')[['Nombre_Completo', 'Estatura_cm']]
-# Cambia 'Nombre' por la columna real que tenga el nombre del estudiante
-
-# === Top 5 por Peso ===
-top_peso = df_filtrado_todos.nlargest(5, 'Peso')[['Nombre_Completo', 'Peso']]
-# Cambia 'Nombre' por el nombre de la columna que uses
-
-# === Mostrar en dos columnas ===
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("### Top 5 Mayor Estatura")
-    st.dataframe(top_estatura.reset_index(drop=True))
-
-with col2:
-    st.markdown("### Top 5 Mayor Peso")
-    st.dataframe(top_peso.reset_index(drop=True))
-
-
-
-# Calcular estadísticas principales
-est_min, est_max, est_prom = (
-    df_filtrado_todos["Estatura_cm"].min(),
-    df_filtrado_todos["Estatura_cm"].max(),
-    df_filtrado_todos["Estatura_cm"].mean()
 )
 
-peso_min, peso_max, peso_prom = (
-    df_filtrado_todos["Peso"].min(),
-    df_filtrado_todos["Peso"].max(),
-    df_filtrado_todos["Peso"].mean()
-)
+# ============================
+# CARGA DEL CSV DESDE DRIVE
+# ============================
+drive_url = "https://drive.google.com/file/d/1KN8H0rPfdtM1F7PMbb4M_2srgsJER6Zu/view?usp=sharing"
+file_id = drive_url.split('/d/')[1].split('/')[0]
+csv_url = f"https://drive.google.com/uc?id={file_id}"
 
-imc_min, imc_max, imc_prom = (
-    df_filtrado_todos["IMC"].min(),
-    df_filtrado_todos["IMC"].max(),
-    df_filtrado_todos["IMC"].mean()
-)
+df_original = pd.read_csv(csv_url, index_col='PatientID')
+df_original = df_original.rename(columns=renombrar_columnas)
+# ============================
+# SECCIONES
+# ============================
 
-edad_min, edad_max, edad_prom = (
-    df_filtrado_todos["Edad"].min(),
-    df_filtrado_todos["Edad"].max(),
-    df_filtrado_todos["Edad"].mean()
-)
+# ---------------------------- INICIO ----------------------------
+if opcion == "Inicio":
+    col1, col2 = st.columns([1.4, 1])
 
-# Redondear a 2 decimales
-est_prom, peso_prom, imc_prom ,edad_prom = round(est_prom, 2), round(peso_prom, 2), round(imc_prom, 2), round(edad_prom, 2)
+    with col1:
+        st.title("Informe Final – Seminario de Ciencia de los Datos")
+        st.subheader("Análisis y modelado predictivo de Alzheimer")
 
+        st.markdown("""
+        <div class="texto-grande">
+        Trabajo desarrollado por Juan Camilo Herrera Osorio
 
-col1, col2 = st.columns(2)
+        - Contexto e introducción del problema.  
+        - Objetivo general y objetivos específicos del análisis.  
+        - Metodología aplicada en cada etapa.  
+        - Exploración y análisis del dataset de pacientes.  
+        - Construcción y evaluación de un modelo predictivo.  
+        - Discusión, conclusiones y recomendaciones finales.  
 
-with col1:
-    st.subheader("Resumen Estadístico - Grupo Completo")
+       
+        </div>
+        """, unsafe_allow_html=True)
 
-with col2:
-    st.subheader("Resumen Estadístico - Mi Equipo")
+    with col2:
+        st.image(
+            "https://ubikare.io/wp-content/uploads/que-siente-una-persona-con-Alzheimer-1-768x513.jpg",
+            use_container_width=True
+        )
 
+# ---------------------------- INTRODUCCIÓN ----------------------------
+elif opcion == "Introducción":
+    st.title("Introducción")
 
+    col1, col2 = st.columns([1.6, 1])
 
-# Crear columnas    
-col1, col2, col3,col4, col5, col6, col7,col8 = st.columns(8)
+    with col1:
+        st.markdown("""
+        <div class="texto-grande">
+        La enfermedad de Alzheimer es uno de los principales trastornos neurodegenerativos 
+        y se caracteriza por deterioro progresivo de la memoria, el pensamiento y la capacidad
+        para realizar actividades de la vida diaria. Su impacto clínico, social y económico
+        la convierte en un problema prioritario para los sistemas de salud.
 
+        En este contexto, la ciencia de los datos proporciona herramientas para analizar 
+        grandes volúmenes de información clínica, identificar patrones relevantes y apoyar
+        la toma de decisiones mediante modelos predictivos.
+        </div>
+        """, unsafe_allow_html=True)
 
+    with col2:
+        st.image(
+            "https://www.quironsalud.com/idcsalud-client/cm/images?locale=es_ES&idMmedia=3290416",
+            use_container_width=True
+        )
 
+    st.markdown("---")
 
-# === Estatura ===
-with col1:
-    st.markdown("### Estatura (cm)")
-    st.metric("Promedio", est_prom)
-    st.metric("Mínima", est_min)
-    st.metric("Máxima", est_max)
+    col3, col4 = st.columns([1, 1.6])
 
-# === Peso ===
-with col2:
-    st.markdown("### Peso (kg)")
-    st.metric("Promedio", peso_prom)
-    st.metric("Mínimo", peso_min)
-    st.metric("Máximo", peso_max)
+    with col3:
+        st.image(
+            "https://sagradafamilia.com.ar/wp-content/uploads/2023/07/CLSF-PH-Freepik-Dia-mundial-del-cerebro-scaled.jpg",
+            use_container_width=True
+        )
 
-# === IMC ===
-with col3:
-    st.markdown("### IMC")
-    st.metric("Promedio", imc_prom)
-    st.metric("Mínimo", round(imc_min, 2))
-    st.metric("Máximo", round(imc_max, 2))
+    with col4:
+        st.markdown("""
+        <div class="texto-grande">
+        El presente informe aplica técnicas de exploración, visualización y aprendizaje
+        automático sobre un dataset de pacientes, con el fin de comprender el comportamiento
+        de distintas variables clínicas y construir un modelo que anticipe el diagnóstico
+        de Alzheimer.
+        </div>
+        """, unsafe_allow_html=True)
 
-# === IMC ===
-with col4:
-    st.markdown("### Edad")
-    st.metric("Promedio", edad_prom)
-    st.metric("Mínimo", round(edad_min, 2))
-    st.metric("Máximo", round(edad_max, 2))
-
-
-# Calcular estadísticas principales
-est_min, est_max, est_prom = (
-    df_filtrado_equipo["Estatura_cm"].min(),
-    df_filtrado_equipo["Estatura_cm"].max(),
-    df_filtrado_equipo["Estatura_cm"].mean()
-)
-
-peso_min, peso_max, peso_prom = (
-    df_filtrado_equipo["Peso"].min(),
-    df_filtrado_equipo["Peso"].max(),
-    df_filtrado_equipo["Peso"].mean()
-)
-
-imc_min, imc_max, imc_prom = (
-    df_filtrado_equipo["IMC"].min(),
-    df_filtrado_equipo["IMC"].max(),
-    df_filtrado_equipo["IMC"].mean()
-)
-
-edad_min, edad_max, edad_prom = (
-    df_filtrado_equipo["Edad"].min(),
-    df_filtrado_equipo["Edad"].max(),
-    df_filtrado_equipo["Edad"].mean()
-)
-
-# Redondear a 2 decimales
-est_prom, peso_prom, imc_prom ,edad_prom = round(est_prom, 2), round(peso_prom, 2), round(imc_prom, 2), round(edad_prom, 2)
-
-
-# === Estatura ===
-with col5:
-    st.markdown("### Estatura (cm)")
-    st.metric("Promedio", est_prom)
-    st.metric("Mínima", est_min)
-    st.metric("Máxima", est_max)
-
-# === Peso ===
-with col6:
-    st.markdown("### Peso (kg)")
-    st.metric("Promedio", peso_prom)
-    st.metric("Mínimo", peso_min)
-    st.metric("Máximo", peso_max)
-
-# === IMC ===
-with col7:
-    st.markdown("### IMC")
-    st.metric("Promedio", imc_prom)
-    st.metric("Mínimo", round(imc_min, 2))
-    st.metric("Máximo", round(imc_max, 2))
-
-with col8:
-    st.markdown("### Edad")
-    st.metric("Promedio", edad_prom)
-    st.metric("Mínimo", round(edad_min, 2))
-    st.metric("Máximo", round(edad_max, 2))
-
-st.markdown("""
-<hr style='border:1px solid #ccc; margin-top:50px;'>
-<p style='text-align:center; color:#6B7280; font-size:16px;'>
-Muchas gracias por la atención prestada.<br> — Programación Avanzada (2025-2)
-</p>
+    st.markdown("""
+<div class="texto-grande">
+Este proyecto busca unir el análisis técnico con una explicación clara y comprensible. 
+La ciencia de datos no solo se centra en los modelos, sino también en la forma en que 
+los resultados se comunican. Por eso, toda la información se presenta de manera organizada 
+y visual, permitiendo entender la historia que cuentan los datos sin perder rigurosidad 
+ni claridad.
+</div>
 """, unsafe_allow_html=True)
 
 
+# ---------------------------- OBJETIVOS ----------------------------
+elif opcion == "Objetivos":
+    st.title("Objetivo General")
+
+    st.markdown("""
+    <div class="texto-grande">
+    Aplicar técnicas de ciencia de datos y aprendizaje automático para analizar, procesar 
+    y modelar la información de pacientes relacionada con la enfermedad de Alzheimer, con 
+    el propósito de identificar patrones clínicos relevantes y construir un modelo predictivo 
+    confiable que apoye la toma de decisiones en salud.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.title("Objetivos Específicos")
+
+    st.markdown("""
+<div class="texto-grande">
+    <ul>
+        <li>Realizar un análisis exploratorio detallado para comprender el comportamiento del dataset.</li>
+        <li>Identificar valores faltantes, inconsistencias y realizar el preprocesamiento adecuado.</li>
+        <li>Analizar correlaciones entre variables clínicas, demográficas y cognitivas.</li>
+        <li>Explorar la distribución de variables clave como edad y puntaje MMSE según el diagnóstico.</li>
+        <li>Entrenar un modelo predictivo basado en Random Forest para clasificar el diagnóstico.</li>
+        <li>Evaluar el desempeño del modelo utilizando métricas como exactitud, precisión, sensibilidad y F1.</li>
+        <li>Presentar los resultados en un dashboard interactivo, facilitando su interpretación.</li>
+    </ul>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ---------------------------- METODOLOGÍA ----------------------------
+elif opcion == "Metodología":
+    st.title("Metodología")
+
+    col1, col2 = st.columns([1.5, 1])
+
+    with col1:
+        st.markdown("""
+        <div class="texto-grande">
+        La metodología empleada sigue el ciclo típico de un proyecto de ciencia de datos:
+
+        1. Recolección del dataset proporcionado por la asignatura.  
+        2. Limpieza y tratamiento de valores faltantes o inconsistentes.  
+        3. Análisis exploratorio y visualización de distribuciones y correlaciones.  
+        4. Preparación del dataset para el modelo (selección de variables y partición en entrenamiento y prueba).  
+        5. Entrenamiento de un modelo de clasificación basado en Random Forest.  
+        6. Evaluación del desempeño del modelo con diferentes métricas.  
+        7. Interpretación de resultados y elaboración de conclusiones y recomendaciones.  
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.image(
+            "https://azura.mx/satelite/wp-content/uploads/sites/4/2022/09/Conoce-los-3-tipos-de-alzheimer-que-existen-550x309.jpg",
+            use_container_width=True
+        )
+
+    st.markdown("""
+    <div class="texto-mediano">
+    Para el desarrollo se utilizaron herramientas como Python, Pandas, Plotly, Scikit-Learn 
+    y Streamlit, lo que permitió integrar el análisis con una interfaz visual interactiva.
+    </div>
+    """, unsafe_allow_html=True)
+
+# ---------------------------- DATASET ----------------------------
+elif opcion == "Dataset":
+    st.title("Dataset de Alzheimer")
+
+    col1, col2 = st.columns([1.2, 1])
+
+    with col1:
+        st.markdown("""
+        <div class="texto-grande">
+        El dataset está compuesto por información clínica, demográfica y cognitiva de pacientes.
+        Incluye variables como edad, nivel educativo, hábitos, antecedentes médicos, resultados
+        de pruebas cognitivas y el diagnóstico final de Alzheimer.
+
+        A continuación se presenta una vista general de los datos:
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.dataframe(df_original, use_container_width=True)
+
+    with col2:
+        st.markdown("<div class='texto-mediano'><strong>Dimensiones del dataset:</strong></div>", unsafe_allow_html=True)
+        st.write("Número de pacientes (filas):", df_original.shape[0])
+        st.write("Número de variables (columnas):", df_original.shape[1])
+
+        # Distribución del diagnóstico
+        dist_diag = df_original["Diagnostico"].value_counts().rename({0: "Sin Alzheimer", 1: "Con Alzheimer"})
+        fig_diag = px.bar(
+            dist_diag,
+            x=dist_diag.index,
+            y=dist_diag.values,
+            labels={"x": "Diagnóstico", "y": "Cantidad de pacientes"},
+            title="Distribución de pacientes según diagnóstico"
+        )
+        st.plotly_chart(fig_diag, use_container_width=True)
+
+# ---------------------------- COLUMNAS DEL DATASET ----------------------------
+elif opcion == "Columnas del Dataset":
+    st.title("Descripción de las Columnas")
+
+    columnas_descripcion = {
+        "Age": "Edad del paciente.",
+        "Gender": "Género (0 = Femenino, 1 = Masculino).",
+        "Ethnicity": "Grupo étnico del paciente.",
+        "EducationLevel": "Nivel educativo.",
+        "BMI": "Índice de masa corporal.",
+        "Smoking": "Hábito de fumar.",
+        "AlcoholConsumption": "Consumo de alcohol.",
+        "PhysicalActivity": "Actividad física.",
+        "DietQuality": "Calidad de la dieta.",
+        "SleepQuality": "Calidad del sueño.",
+        "FamilyHistoryAlzheimers": "Antecedentes familiares.",
+        "CardiovascularDisease": "Enfermedades cardiovasculares.",
+        "Diabetes": "Presencia de diabetes.",
+        "Depression": "Presencia de depresión.",
+        "HeadInjury": "Lesión en la cabeza.",
+        "Hypertension": "Hipertensión.",
+        "SystolicBP": "Presión arterial sistólica.",
+        "DiastolicBP": "Presión arterial diastólica.",
+        "CholesterolTotal": "Colesterol total.",
+        "CholesterolLDL": "Colesterol LDL.",
+        "CholesterolHDL": "Colesterol HDL.",
+        "CholesterolTriglycerides": "Triglicéridos.",
+        "MMSE": "Puntaje de evaluación cognitiva MMSE.",
+        "FunctionalAssessment": "Evaluación funcional del paciente.",
+        "MemoryComplaints": "Quejas de memoria.",
+        "BehavioralProblems": "Problemas de comportamiento.",
+        "ADL": "Actividades de la vida diaria.",
+        "Confusion": "Presencia de confusión.",
+        "Disorientation": "Desorientación.",
+        "PersonalityChanges": "Cambios de personalidad.",
+        "DifficultyCompletingTasks": "Dificultad para completar tareas.",
+        "Forgetfulness": "Olvidos frecuentes.",
+        "Diagnosis": "Diagnóstico final de Alzheimer.",
+        "DoctorInCharge": "Médico encargado (dato confidencial)."
+    }
+
+    nulos = df_original.isnull().sum()
+
+    cols = st.columns(3)
+    i = 0
+    for col, desc in columnas_descripcion.items():
+        with cols[i % 3]:
+            st.subheader(col)
+            st.markdown(f"<div class='texto-mediano'>{desc}</div>", unsafe_allow_html=True)
+
+            if col in df_original.columns:
+                cant = nulos[col]
+                estado = "Sin nulos" if cant == 0 else f"{cant} valores nulos"
+                st.write("Estado de datos:", estado)
+            st.markdown("---")
+        i += 1
+    df_original = df_original.rename(columns=renombrar_columnas)
+
+# ---------------------------- ANÁLISIS EXPLORATORIO ----------------------------
+elif opcion == "Análisis Exploratorio":
+    st.title("Análisis Exploratorio del Dataset")
+
+    # Distribución de edades según diagnóstico
+    st.subheader("Distribución de edades según diagnóstico")
+    fig = px.histogram(
+        df_original,
+        x="Edad",
+        color="Diagnostico",
+        barmode="overlay",
+        color_discrete_map={0: "lightblue", 1: "red"},
+        labels={"Edad": "Edad", "Diagnostico": "Diagnóstico"},
+        title="Distribución de edad para pacientes con y sin Alzheimer"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("""
+    <div class="texto-mediano">
+    La gráfica muestra cómo se distribuye la edad entre los pacientes con diagnóstico positivo y negativo.
+    Se observa que la mayoría de casos de Alzheimer se concentran en edades mayores, lo que coincide con
+    la literatura que relaciona la enfermedad con el envejecimiento.
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("---")
+    # ===========================================
+    # DISTRIBUCIÓN DE GÉNERO EN PACIENTES CON ALZHEIMER
+    # ===========================================
+    
+    st.subheader("Distribución por género en pacientes con Alzheimer")
+    
+    col1, col2 = st.columns([1, 1.2])
+    
+    # ======== COLUMNA 1: Gráfica ========
+    with col1:
+    
+# Crear columna combinada
+        df_original["Grupo"] = df_original.apply(
+            lambda row: (
+                "Mujeres con Alzheimer" if row["Genero"] == 0 and row["Diagnostico"] == 1 else
+                "Mujeres sin Alzheimer" if row["Genero"] == 0 and row["Diagnostico"] == 0 else
+                "Hombres con Alzheimer" if row["Genero"] == 1 and row["Diagnostico"] == 1 else
+                "Hombres sin Alzheimer"
+            ),
+            axis=1
+        )
+        
+        conteo_grupos = df_original["Grupo"].value_counts()
+        
+        fig_torta_completa = px.pie(
+            names=conteo_grupos.index,
+            values=conteo_grupos.values,
+            title="Distribución de género y diagnóstico en el dataset",
+            color=conteo_grupos.index,
+            color_discrete_map={
+                "Mujeres con Alzheimer": "#FF4B6E",   # rojo rosado fuerte
+                "Mujeres sin Alzheimer": "#FFB6C1",   # rosado suave
+                "Hombres con Alzheimer": "#4B9CD3",   # azul fuerte
+                "Hombres sin Alzheimer": "#ADD8E6"    # azul suave
+            }
+        )
+        
+        fig_torta_completa.update_traces(textinfo="percent+label")
+        
+        st.plotly_chart(fig_torta_completa, use_container_width=True)
+    
+    # ======== COLUMNA 2: Texto + Imagen ========
+    with col2:
+    
+        st.markdown("""
+        <div class="texto-mediano">
+        Según el análisis de nuestro dataset, <strong>las mujeres presentan una mayor proporción de casos de Alzheimer</strong> en comparación con los hombres.<br><br>
+        Este comportamiento coincide con lo reportado por la ciencia, ya que las mujeres son más propensas a desarrollar 
+        Alzheimer debido a una combinación de factores biológicos, genéticos, hormonales y psicosociales. 
+        </div>
+        """, unsafe_allow_html=True)
+    
+        st.image(
+            "https://cloudfront-us-east-1.images.arcpublishing.com/infobae/JLFZROQ5XVASNBVUGKKUDHMVCM.jpg",
+            use_container_width=True
+        )
+    
+    st.markdown("---")
+
+# ===========================================
+# DISTRIBUCIÓN DEL PUNTAJE MMSE SEGÚN DIAGNÓSTICO
+# ===========================================
+
+    st.subheader("Distribución del puntaje MMSE según diagnóstico")
+    
+    col1Box, col2Box = st.columns([1, 1])
+    
+    # ------------------ COLUMNA 1: TEXTO EXPLICATIVO ------------------
+    with col1Box:
+        st.markdown("""
+        <div class="texto-mediano">
+        El <strong>MMSE (Mini-Mental State Examination)</strong> es una de las pruebas
+        más utilizadas en el mundo para evaluar el estado cognitivo de una persona.
+        Se usa especialmente para detectar deterioro cognitivo y sospecha de Alzheimer.<br><br>
+    
+        Esta prueba evalúa:<br>
+        • Orientación en tiempo y lugar<br>
+        • Memoria inmediata y a corto plazo<br>
+        • Atención y cálculo<br>
+        • Lenguaje y comprensión<br>
+        • Capacidad para seguir instrucciones<br><br>
+    
+        <strong>Interpretación del puntaje MMSE:</strong><br><br>
+    
+        • <strong>24 – 30:</strong> Función cognitiva normal.<br>
+        • <strong>18 – 23:</strong> Deterioro cognitivo leve.<br>
+        • <strong>0 – 17:</strong> Deterioro cognitivo moderado o severo.<br><br>
+    
+        Valores bajos suelen indicar problemas de memoria, desorientación y deterioro funcional,
+        los cuales están estrechamente relacionados con la enfermedad de Alzheimer.
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # ------------------ COLUMNA 2: GRÁFICO + ANÁLISIS ------------------
+    with col2Box:
+    
+        fig_mmse = px.box(
+            df_original,
+            x="Diagnostico",
+            y="Puntaje_MMSE",
+            labels={"Diagnostico": "Diagnóstico", "Puntaje_MMSE": "Puntaje MMSE"},
+            title="Comparación del puntaje cognitivo MMSE entre diagnósticos"
+        )
+    
+        st.plotly_chart(fig_mmse, use_container_width=True)
+    
+        st.markdown("""
+        <div class="texto-mediano">
+        En el boxplot se observa que los pacientes diagnosticados con Alzheimer presentan
+        <strong>puntajes MMSE mucho más bajos</strong> que quienes no tienen la enfermedad.<br><br>
+    
+        Esto coincide con lo que indica la ciencia: a medida que el deterioro cognitivo avanza,
+        el MMSE disminuye significativamente, siendo uno de los indicadores más utilizados 
+        para detectar el Alzheimer.
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Mapa de correlaciones
+    st.subheader("Mapa de correlaciones")
+    corr = df_original.corr(numeric_only=True)
+    fig_corr = px.imshow(
+        corr,
+        text_auto=True,
+        color_continuous_scale="Blues",
+        aspect="auto",
+        title="Mapa de correlación entre variables numéricas"
+    )
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+    st.markdown("""
+    <div class="texto-mediano">
+    El mapa de correlaciones permite identificar qué variables numéricas tienen mayor relación 
+    con el diagnóstico de Alzheimer. En el análisis realizado, se observa que las correlaciones 
+    más destacadas corresponden a variables directamente asociadas al deterioro cognitivo 
+    y funcional del paciente. Las relaciones más importantes fueron:
+
+    - <strong>Evaluacion Funcional (-0.36):</strong> los pacientes con menor desempeño funcional 
+      presentan mayor probabilidad de diagnóstico positivo.
+    - <strong>Actividades Diarias (-0.33):</strong> la pérdida de independencia en actividades diarias es un 
+      indicador fuertemente asociado al Alzheimer.
+    - <strong>Puntaje MMSE (-0.23):</strong> un puntaje cognitivo bajo se relaciona con mayor presencia 
+      de la enfermedad.
+    - <strong>Quejas Memoria (+0.30):</strong> las quejas de memoria muestran una correlación 
+      clara con el diagnóstico.
+    - <strong>Problemas Comportamiento (+0.22):</strong> los problemas de comportamiento tienden a 
+      aumentar la probabilidad de diagnóstico positivo.
+
+    Estas variables representan síntomas y manifestaciones clínicas directas de la enfermedad, 
+    por lo que su alta correlación es consistente con la literatura médica. Asimismo, variables 
+    como colesterol, presión arterial o diabetes muestran correlaciones bajas, indicando que en 
+    este dataset no son determinantes para la clasificación del Alzheimer.
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ============================
+    # HEATMAP DE CORRELACIONES VS Diagnostico
+    # ============================
+    
+    st.subheader("Correlación de cada variable con el Diagnóstico de Alzheimer")
+    
+    # Calcular correlaciones solo contra Diagnostico
+    correlaciones_diag = df_original.corr(numeric_only=True)["Diagnostico"].sort_values(ascending=False)
+    
+    # Crear dataframe ordenado
+    df_correlaciones = pd.DataFrame({
+        "Variable": correlaciones_diag.index,
+        "Correlación": correlaciones_diag.values
+    })
+    
+    # Heatmap horizontal
+    fig_corr_diag = px.imshow(
+        df_correlaciones[["Correlación"]].T,
+        labels=dict(x="Variable", y="", color="Correlación"),
+        x=df_correlaciones["Variable"],
+        color_continuous_scale="RdBu_r",
+        aspect="auto",
+    )
+    
+    fig_corr_diag.update_layout(
+        title="Heatmap de correlación de cada variable vs Diagnostico",
+        xaxis_tickangle=45,
+        height=350
+    )
+    
+    st.plotly_chart(fig_corr_diag, use_container_width=True)
+    
+    # Texto explicativo
+    st.markdown("""
+    <div class="texto-mediano">
+    Este heatmap muestra exclusivamente la correlación de cada variable con el diagnóstico de Alzheimer.
+    Las variables están ordenadas de mayor a menor correlación absoluta, lo que permite identificar 
+    rápidamente cuáles tienen mayor influencia en la clasificación del paciente.
+    
+    Se observa que las variables más asociadas al diagnóstico son:
+    
+    - <strong>Evaluacion Funcional</strong>  
+    - <strong>Actividades Diarias</strong>  
+    - <strong>Puntaje MMSE</strong>  
+    - <strong>Quejas Memoria</strong>  
+    - <strong>BehavioralProblems</strong>  
+    
+    Estas variables presentan los valores más altos (positivos y negativos), confirmando que 
+    los factores cognitivos y funcionales son los que más determinan el diagnóstico en este dataset.
+    </div>
+     """, unsafe_allow_html=True)
+ 
+
+
+# ---------------------------- MODELAMIENTO PREDICTIVO ----------------------------
+elif opcion == "Modelamiento Predictivo":
+    st.title("Modelamiento Predictivo del Diagnóstico de Alzheimer")
+
+    st.markdown("""
+    <div class="texto-grande">
+    En esta sección se construye un modelo de aprendizaje automático para predecir el diagnóstico
+    de Alzheimer a partir de las variables disponibles en el dataset. Se utiliza un clasificador 
+    Random Forest, adecuado para datos tabulares y capaz de manejar relaciones no lineales.
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Preparación de datos
+    st.subheader("Preparación del Dataset")
+
+    df_modelo = df_original.copy()
+    if "Medico_Encargado" in df_modelo.columns:
+        df_modelo = df_modelo.drop(columns=["Medico_Encargado"])
+
+    X = df_modelo.drop(columns=["Diagnostico"])
+    y = df_modelo["Diagnostico"]
+
+    from sklearn.model_selection import train_test_split
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+    import numpy as np
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, random_state=42, stratify=y
+    )
+
+    st.markdown(
+        f"<div class='texto-mediano'>Total de registros: {len(df_modelo)} | "
+        f"Entrenamiento: {len(X_train)} | Prueba: {len(X_test)}</div>",
+        unsafe_allow_html=True
+    )
+
+    # Entrenamiento
+    st.subheader("Entrenamiento del Modelo Random Forest")
+
+    modelo = RandomForestClassifier(
+        n_estimators=200,
+        max_depth=None,
+        random_state=42
+    )
+    modelo.fit(X_train, y_train)
+    predicciones = modelo.predict(X_test)
+
+    # Métricas
+    st.subheader("Métricas del Modelo")
+
+    accuracy = accuracy_score(y_test, predicciones)
+    precision = precision_score(y_test, predicciones)
+    recall = recall_score(y_test, predicciones)
+    f1 = f1_score(y_test, predicciones)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown(f"""
+    <div class="metric-card">
+        <strong>Exactitud (Accuracy):</strong> 
+        <span class="metric-valor">{accuracy*100:.1f}%</span><br><br>
+        <div style="font-size:16px; color:#D1D5DB;">
+            Indica el porcentaje total de predicciones correctas.<br>
+            Mide qué tanto acierta el modelo en general.
+        </div>
+        <hr style="opacity:0.2; margin:12px 0;">
+        <strong>Precisión (Precision):</strong><br>
+        <span class="metric-valor">{precision*100:.1f}%</span>
+        <div style="font-size:16px; color:#D1D5DB; margin-top:6px;">
+            De los pacientes que el modelo dijo que <b>SÍ</b> tenían Alzheimer,<br>
+            ¿cuántos realmente lo tenían?<br>
+            Evalúa qué tan confiables son los positivos.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+    <div class="metric-card">
+        <strong>Sensibilidad (Recall):</strong> 
+        <span class="metric-valor">{recall*100:.1f}%</span><br><br>
+        <div style="font-size:16px; color:#D1D5DB;">
+            De los pacientes que realmente tenían Alzheimer,<br>
+            ¿cuántos logró detectar el modelo?<br>
+            Evita falsos negativos.
+        </div>
+        <hr style="opacity:0.2; margin:12px 0;">
+        <strong>Puntaje F1:</strong><br>
+        <span class="metric-valor">{f1*100:.1f}%</span>
+        <div style="font-size:16px; color:#D1D5DB; margin-top:6px;">
+            Combina precisión y sensibilidad.<br>
+            Resume el desempeño global del modelo en una sola métrica.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+ 
+
+    st.markdown("---")
+
+# ================================
+# MATRIZ DE CONFUSIÓN + IMPORTANCIA EN DOS COLUMNAS
+# ================================
+
+    col_izq, col_der = st.columns(2)
+    
+    # -------------------- MATRIZ DE CONFUSIÓN --------------------
+    with col_izq:
+        st.subheader("Matriz de Confusión")
+        matriz = confusion_matrix(y_test, predicciones)
+    
+        fig, ax = plt.subplots(figsize=(3, 3))
+        sns.heatmap(matriz, annot=True, fmt="d", cmap="Blues", cbar=False, ax=ax)
+        ax.set_xlabel("Predicción")
+        ax.set_ylabel("Real")
+        ax.set_title("Matriz de Confusión")
+        st.pyplot(fig)
+    
+        st.markdown("""
+        <div class="texto-mediano">
+        La matriz de confusión permite observar cuántos pacientes fueron clasificados correctamente
+        como con o sin Alzheimer, así como los errores de clasificación. El número de verdaderos positivos 
+        y verdaderos negativos es considerablemente mayor que el de falsos positivos y falsos negativos,
+        lo que confirma un buen comportamiento del modelo.
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # -------------------- IMPORTANCIA DE VARIABLES --------------------
+    with col_der:
+        st.subheader("Importancia de Variables")
+        importancias = modelo.feature_importances_
+        variables = X.columns
+    
+        df_importancias = pd.DataFrame({
+            "Variable": variables,
+            "Importancia": importancias
+        }).sort_values(by="Importancia", ascending=False)
+    
+        fig2 = px.bar(
+            df_importancias,
+            x="Importancia",
+            y="Variable",
+            orientation="h",
+            title="Importancia de las variables en el modelo Random Forest"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+    
+        st.markdown("""
+        <div class="texto-mediano">
+        Las variables con mayor importancia corresponden principalmente al puntaje MMSE, la evaluación funcional,
+        la edad y algunos factores clínicos asociados a la salud cardiovascular. Esto respalda la idea de que 
+        el deterioro cognitivo y ciertas condiciones médicas influyen de manera directa en el diagnóstico de Alzheimer.
+        </div>
+        """, unsafe_allow_html=True)
+
+
+elif opcion == "Resultados":
+    st.title("Resultados del Análisis")
+
+    st.markdown("""
+    <div class="texto-grande">
+    A partir del análisis exploratorio y del modelamiento predictivo se obtuvieron los siguientes resultados clave:
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="texto-mediano">
+        • <strong>Evaluación Funcional (-0.36):</strong> la baja capacidad funcional está fuertemente asociada con la presencia de Alzheimer.<br><br>
+        • <strong>Actividades Diarias / ADL (-0.33):</strong> la pérdida de independencia es un indicador crítico del deterioro cognitivo.<br><br>
+        • <strong>Puntaje MMSE (-0.23):</strong> valores bajos en la evaluación cognitiva se relacionan claramente con el diagnóstico.<br><br>
+        • <strong>Quejas de Memoria (+0.30):</strong> los pacientes que reportan problemas de memoria tienen mayor probabilidad de diagnóstico.<br><br>
+        • <strong>Problemas de Comportamiento (+0.22):</strong> las alteraciones conductuales también muestran relación importante con el Alzheimer.<br><br>
+        • <strong>El modelo Random Forest obtuvo una exactitud cercana al 94%:</strong> mostrando buena capacidad predictiva general.<br><br>
+        • <strong>La matriz de confusión demostró pocos errores:</strong> la mayoría de pacientes fueron clasificados correctamente.<br>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ---------------------------- DISCUSIÓN ----------------------------
+elif opcion == "Discusión":
+    st.title("Discusión de Resultados")
+
+    st.markdown("""
+    <div class="texto-grande">
+    Los resultados confirman que los factores cognitivos y funcionales son determinantes
+    en la identificación de la enfermedad de Alzheimer. La fuerte influencia del puntaje MMSE
+    y de las evaluaciones funcionales coincide con los criterios clínicos utilizados en la práctica.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="texto-mediano">
+    La buena capacidad predictiva del modelo Random Forest demuestra que es posible apoyar el diagnóstico
+    mediante herramientas de aprendizaje automático, siempre y cuando se disponga de información clínica de calidad.
+    Sin embargo, es importante considerar que el modelo depende del dataset utilizado y que su generalización 
+    a otros contextos requeriría validaciones adicionales.
+    </div>
+    """, unsafe_allow_html=True)
+
+elif opcion == "Conclusiones y Recomendaciones":
+    st.title("Conclusiones del Informe")
+
+    st.markdown("""
+<div class="texto-grande">
+A partir del análisis realizado se concluye:
+<ul>
+<li><strong>El análisis de datos permitió identificar patrones clínicos y cognitivos</strong>
+asociados al diagnóstico de Alzheimer.</li>
+
+<li><strong>Las variables cognitivas y funcionales fueron las más influyentes</strong>
+en el diagnóstico, tanto en las correlaciones como en el modelo predictivo.</li>
+
+<li><strong>El modelo Random Forest presentó un desempeño sólido</strong>,
+con alta exactitud, precisión, sensibilidad y F1.</li>
+
+<li><strong>La visualización interactiva facilitó la interpretación de resultados</strong>,
+permitiendo conectar las gráficas con el análisis estadístico.</li>
+</ul>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.title("Recomendaciones")
+
+    st.markdown("""
+<div class="texto-mediano">
+<ul>
+<li><strong>Ampliar el dataset</strong> con pacientes de distintos entornos clínicos
+para mejorar la generalización del modelo.</li>
+
+<li><strong>Integrar el modelo en pruebas piloto</strong> dentro de un sistema clínico
+mediante APIs, para evaluar su rendimiento en tiempo real.</li>
+
+<li><strong>Realizar análisis longitudinales</strong> que permitan estudiar la evolución
+de los pacientes y construir modelos más precisos.</li>
+</ul>
+</div>
+""", unsafe_allow_html=True)
+
+    st.success("Muchas gracias.")
