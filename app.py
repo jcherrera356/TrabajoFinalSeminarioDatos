@@ -48,7 +48,7 @@ renombrar_columnas = {
     "DoctorInCharge": "Medico_Encargado"
 }
 st.set_page_config(
-    page_title="Informe Alzheimer - Ciencia de Datos",
+    page_title="Informe Alzheimer -Seminario Ciencia de Datos",
     layout="wide",
     initial_sidebar_state="expanded"
 )
