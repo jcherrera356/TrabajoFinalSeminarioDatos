@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+
 # ============================
 # CONFIGURACIÓN GENERAL
 # ============================
@@ -588,6 +592,9 @@ elif opcion == "Análisis Exploratorio":
     los factores cognitivos y funcionales son los que más determinan el diagnóstico en este dataset.
     </div>
      """, unsafe_allow_html=True)
+    
+
+
  
 
 
